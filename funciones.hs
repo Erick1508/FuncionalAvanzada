@@ -90,5 +90,15 @@ theta :: Hypothesis Double -> Sample Double -> Double
 theta h s = foldl' (+) 0 (colapso (transpose (c h: [x s])))
   where colapso lis = map (foldl' (*) 1) lis
 
+cost :: Hypothesis Double -> [Sample Double] -> Double
+cost h ss = foldl' (+) 0 (calculo h ss) / fromIntegral (length ss)*2
+  where calculo h ss = map (eval h) ss 
+	eval hy sam = (theta hy sam - y sam)^2
+
+
+ 
+
+
+
 
 

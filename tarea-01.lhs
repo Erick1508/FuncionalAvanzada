@@ -282,7 +282,9 @@ $$ J(\theta) = \frac{1}{2m} \sum_{i=1}^{m}{(h_\theta(x^{(i)}) - y^{(i)})^2} $$
 
 \begin{lstlisting}
 > cost :: Hypothesis Double -> [Sample Double] -> Double
-> cost h ss = undefined
+> cost h ss = foldl' (+) 0 (calculo h ss) / fromIntegral (length ss)*2
+>  where calculo h ss = map (eval h) ss 
+>	eval hy sam = (theta hy sam - y sam)^2
 \end{lstlisting}
 
 Su función debe ser escrita como un \emph{fold} que realice todos

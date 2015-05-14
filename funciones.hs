@@ -3,7 +3,7 @@ import Data.Functor
 import Data.Monoid
 import Data.Foldable (foldMap)
 import Data.Tree
-
+import Data.Maybe (fromJust)
 
 
 
@@ -75,7 +75,7 @@ training = [
 
 
 
-
+-- ---------------------- MACHINE LEARNING-----------------------------------
   
 veryClose :: Double -> Double -> Bool
 veryClose a b = abs (a - b) <= epsilon 
@@ -87,16 +87,108 @@ addOnes = map agregar
 	
 	
 theta :: Hypothesis Double -> Sample Double -> Double
-theta h s = foldl' (+) 0 (colapso (transpose (c h: [x s])))
-  where colapso lis = map (foldl' (*) 1) lis
+theta h s = foldl' (+) 0 ( zipWith (*) (c h) (x s))
+
 
 cost :: Hypothesis Double -> [Sample Double] -> Double
-cost h ss = foldl' (+) 0 (calculo h ss) / fromIntegral (length ss)*2
-  where calculo h ss = map (eval h) ss 
-	eval hy sam = (theta hy sam - y sam)^2
+cost h ss = (foldr ((+).eval h) 0 ss) / (fromIntegral (length ss)*2)
+  where eval hy sam = (theta hy sam - y sam)^2
+	
+descend :: Double -> Hypothesis Double -> [Sample Double] -> Hypothesis Double
+descend alpha h ss = Hypothesis {c = reverse ( fst ( foldl' (calculo (length ss) alpha h ss ) ([],0) (c h)))}
+  where calculo tam alpha hs ss (lis, num) h = (sumatoria tam alpha ss hs num : lis, num+1) 
+	sumatoria tam alpha ss hy num = c hy !! num - ((foldr ((+).funaux hy num) 0 ss) * alpha/ fromIntegral tam) 
+	funaux hyp num s = ((theta hyp s) - y s)* (x s !! num)
 
 
- 
+
+gd :: Double -> Hypothesis Double -> [Sample Double] -> [(Integer,Hypothesis Double,Double)]
+gd alpha h ss = unfoldr (\(i,hypo,c) -> 
+			    if veryClose c (cost (descend alpha hypo (addOnes ss)) (addOnes ss)) then Nothing
+			    else Just ((i,hypo,c),calculo i alpha hypo (addOnes ss))) (0,h,cost h (addOnes ss))
+  where calculo i alpha hy ss = (i+1,descend alpha hy ss, cost (descend alpha hy ss) ss)
+
+						       
+
+-- ---------------- -------MONOIDE------------------------
+
+newtype Max a = Max { getMax :: Maybe a }
+	deriving ( Eq ,Ord,Show)
+	
+instance (Ord a) => Monoid ( Max a ) where
+	mempty                       = Max Nothing
+	mappend (Max x) (Max y) = Max $ max x y
+	
+	
+	
+-- ---------------- ZIPPER -----------------------------------
+
+data Filesystem a = File a | Directory a [ Filesystem a ]
+      deriving(Show,Eq)
+
+      
+    
+data Breadcrumbs a = Down a ([Filesystem a],[Filesystem a],[Filesystem a])
+	      deriving(Show,Eq)
+
+type Zipper a = ( Filesystem a , Breadcrumbs a )
+      
+testFile :: Filesystem Integer
+testFile = Directory 2 [File 3,File 4,Directory 5 [File 6],File 7]
+
+testFile2 :: Filesystem Integer
+testFile2 = Directory 2 [File 3,File 4,Directory 5 [File 6,Directory 8 [File 9,File 10]],File 7]
+
+
+testFile1 :: Filesystem Integer
+testFile1 = File 42
+
+testFile3 :: Filesystem Integer
+testFile3 = Directory 42 []
+
+goDown:: Zipper a -> Maybe (Zipper a)
+goDown  (File a,_) = Nothing
+goDown  (Directory a [],Down name ( lisDir ,_, _)) = Nothing
+goDown (Directory a xs,Down name ( lisDir ,y,ys)) = 
+		      Just (head xs ,Down a (Directory name (reverse y++ [Directory a xs]++ys ):lisDir ,[],tail xs))
+
+		      
+
+goRight:: Zipper a -> Maybe (Zipper a)
+goRight  (filesys, Down name ( lis, x, xs)) = 
+			    if null xs then Nothing
+				else Just (head xs ,Down name (lis,filesys:x,tail xs))
+
+goLeft:: Zipper a -> Maybe (Zipper a)
+goLeft (filesys, Down name ( lis, x, xs)) = 
+			    if null x then Nothing
+				      else Just (head x ,Down name (lis,tail x, filesys:xs))
+						 
+goBack:: Zipper a -> Maybe (Zipper a)
+goBack (_,Down name ( [] ,_,_)) = Nothing
+goBack (_,Down name ( lisDir ,_,_)) = Just (prilista (head lisDir),Down (nameDir (head lisDir)) (tail lisDir,[],reslista (head lisDir)))
+  where prilista (Directory a b) = head b
+	nameDir (Directory a b) = a
+	reslista (Directory a b) = tail b
+
+tothetop:: Zipper a -> Zipper a
+tothetop (tope,Down name ( [] ,lis,lis1)) =  (tope,Down name ( [] ,lis,lis1))
+tothetop (tope,Down name ( lisdir,lis,lis1)) = tothetop $ fromJust $ goBack (tope,Down name ( lisdir,lis,lis1))
+
+modify:: ( a -> a ) -> Zipper a -> Zipper a
+modify f (File a ,Down name ( lisdir,lis,lis1)) = (File (f a) ,Down name ( lisdir,lis,lis1))
+modify f (Directory a b,Down name ( lisdir,lis,lis1)) = (Directory (f a) b ,Down name ( lisdir,lis,lis1))
+
+focus :: Filesystem a -> Zipper a
+focus (File a) = (File a,Down a ([],[],[]))
+focus (Directory a lis) = (Directory a lis ,Down a([] ,[],[]))
+
+defocus :: Zipper a -> Filesystem a
+defocus (File a, _ ) = File a
+defocus (Directory a lis,_) = Directory a lis
+
+
+
 
 
 

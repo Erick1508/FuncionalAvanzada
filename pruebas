@@ -1,0 +1,22 @@
+let sinDir = focus testFile1
+let conDir = focus testFile
+let conDir2 = focus testFile2
+
+
+goDown $ fromJust $ goDown conDir
+
+
+goDown $ fromJust $ goRight $ fromJust $ goRight conDir
+
+goRight $ fromJust $ goRight conDir
+goRight $ fromJust $ goRight $ fromJust $ goRight $ fromJust $ goRight conDir
+
+
+goRight $ fromJust $ goLeft conDir
+goLeft $ fromJust $ goRight conDir
+
+
+
+
+
+ goDown $fromJust $ goRight $fromJust $ goDown $fromJust $ goRight $ fromJust $ goRight conDir2

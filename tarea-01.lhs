@@ -47,11 +47,11 @@
 
 \title{CI4251 - Programación Funcional Avanzada \\ Tarea 1}
 
-\author{Ernesto Hernández-Novich\\
-86-17791\\
-\href{mailto:emhn@usb.ve}{<emhn@usb.ve>}}
+\author{Erick Marrero\\
+09-10981\\
+\href{mailto:emhn@usb.ve}{<09-10981@usb.ve>}}
 
-\date{Abril 17, 2015}
+\date{Mayo 01, 2015}
 
 \maketitle
 
@@ -59,21 +59,10 @@
 
 \section{Machine Learning}
 
-En este ejercicio, investigaremos la técnica de Regresión Lineal
-Multivariable con el método de \emph{Gradient Descent}, aprovechando
-las ecuaciones normales. Implantaremos el algoritmo paso a paso en
-Haskell, aprovechando \emph{folds} y \emph{unfolds}.
-
-No es necesaria experiencia previa con el Algoritmo, pues todos los
-detalles serán presentados a lo largo del problema. Sugiero que
-construya las funciones en el mismo orden en que se van proponiendo,
-pues van aumentando de complejidad.
-
 \subsection{Definiciones Generales}
 
 Para el desarrollo de la solución, serán necesarios los módulos
-\footnote{Los dos últimos opcionales si quiere tener el
-gráfico que muestra la convergencia.}
+
 
 \begin{lstlisting}
 > import Data.List
@@ -81,8 +70,7 @@ gráfico que muestra la convergencia.}
 > import Data.Monoid
 > import Data.Foldable (foldMap)
 > import Data.Tree
-> import Graphics.Rendering.Chart.Easy
-> import Graphics.Rendering.Chart.Backend.Cairo
+> import Data.Maybe (fromJust)
 \end{lstlisting}
 
 Las técnicas de \emph{Machine Learning} operan sobre conjuntos
@@ -213,35 +201,25 @@ training = [
 }
 
 que cuenta con 47 muestras de entrenamiento listas para usar.
-Tampoco debe preocuparle mucho qué representan -- al algoritmo no
-le importan y Ud. tampoco tiene que preocuparse por eso.
-\footnote{En la práctica, las muestras suelen estar en diferentes
-escalas (precio en miles, unidades de Frobs, porcentajes, etc.) y
-uno de los trabajos previos es normalizar las medidas. Ya eso fue
-hecho por Ud. porque no es importante para esta materia.}
 
-\subsection{Ahora le toca a Ud.}
+
+\subsection{ Funciones a desarrollar }
 
 \subsubsection{Comparar en punto flotante}
 
-No se puede y Ud. lo sabe. Pero necesitamos una manera de determinar
-si la diferencia entre dos números en punto flotante es
-$\epsilon-$despreciable
+En esta función se restan los valores para chequear si es 
+despreciable o no
 
 \begin{lstlisting}
 > veryClose :: Double -> Double -> Bool
 > veryClose v0 v1 = abs (v0 - v1) <= epsilon 
 \end{lstlisting}
 
-Por favor \textbf{no} use un \texttt{if}\ldots
 
 \subsubsection{Congruencia dimensional}
 
-Seguramente notó que los vectores con muestras
-tienen dimensión $n$, pero la hipótesis tiene dimensión $n+1$.
-Eso es porque la hipótesis necesariamente debe agregar un coeficiente
-constante para la interpolación lineal. En consecuencia \emph{todas}
-las muestras necesitan incorporar $x_0 = 1$.
+Para agregar un coeficiente, se hace un map para recorrer
+cada muestra y se coloca un 1 adicional en x
 
 \begin{lstlisting}
 > addOnes :: [Sample Double] -> [Sample Double]
@@ -250,26 +228,22 @@ las muestras necesitan incorporar $x_0 = 1$.
 >	add lis =  1:lis
 \end{lstlisting}
 
-Escriba la función \texttt{addOnes} usando exclusivamente funciones
-de orden superior y en estilo \emph{point-free} (con argumento
-implícito, como puede ver).
 
 \subsubsection{Evaluando Hipótesis}
 
 Si tanto una hipótesis $\theta$ como una muestra $X$ son vectores
 de $n+1$ dimensiones, entonces se puede evaluar la hipótesis en
 $h_\theta(X) = \theta^TX$ calculando el producto punto
-de ambos vectores
+de ambos vectores.
+
+Para ello se multiplica el vector 'h' con el vector 'x' componente a 
+componente usando zipWith y luego se usa un foldl' para hacer las 
+sumas de la lista resultante
 
 \begin{lstlisting}
 > theta :: Hypothesis Double -> Sample Double -> Double
-> theta h s = foldl' (+) 0 (colapso (transpose (c h: [x s])))
->  where colapso lis = map (foldl' (*) 1) lis
+> theta h s = foldl' (+) 0 ( zipWith (*) (c h) (x s))
 \end{lstlisting}
-
-Escriba la función \texttt{theta} usando exclusivamente funciones
-de orden superior. Puede suponer que ambos vectores tienen las
-dimensiones correctas.
 
 Una vez que pueda evaluar hipótesis, es posible determinar cuán
 buena es la hipótesis sobre el conjunto de entrenamiento. La calidad
@@ -280,17 +254,16 @@ evalúa la hipótesis en ese vector y se compara con el $y(i)$. La
 fórmula concreta para $m$ muestras es
 $$ J(\theta) = \frac{1}{2m} \sum_{i=1}^{m}{(h_\theta(x^{(i)}) - y^{(i)})^2} $$
 
+Para el cálculo del costo, se usa un foldr para recorrer las muestras y aplicar 
+la fórmula correspondiente, y finalmente se divide entre la cantidad de
+muestras
+
 \begin{lstlisting}
 > cost :: Hypothesis Double -> [Sample Double] -> Double
-> cost h ss = foldl' (+) 0 (calculo h ss) / fromIntegral (length ss)*2
->  where calculo h ss = map (eval h) ss 
->	eval hy sam = (theta hy sam - y sam)^2
+> cost h ss =
+>	(foldr ((+).eval h) 0 ss) / (fromIntegral (length ss)*2)
+>  	where eval hy sam = (theta hy sam - y sam)^2
 \end{lstlisting}
-
-Su función debe ser escrita como un \emph{fold} que realice todos
-los cómputos en \emph{una sola pasada} sobre el conjunto de muestras.
-Debe escribirla de manera general, suponiendo que \texttt{ss} podría
-tener una cantidad arbitraria de muestras disponibles.
 
 \subsection{Bajando por el gradiente}
 
@@ -307,15 +280,30 @@ importa para esta materia, es natural pensar que nuestro algoritmo
 iterativo tendrá que detenerse cuando la diferencia entre $c$ y $c'$
 sea $\epsilon-$despreciable.
 
-La primera parte de este algoritmo, y sin duda la función más
-complicada de este ejercicio, es aquella que dada una hipótesis
-y un conjunto de entrenamiento, debe producir una nueva hipótesis
-mejorada según el coeficiente de aprendizaje.
+Para calcular la nueva hipótesis, se hace un foldl' para ir recorriendo
+las componentes de la hipótesis anterior, y el valor semilla es una
+tupla que contiene una lista que guarda los valores calculados de la 
+nueva hipótesis  y el otro valor de la tupla es la posición de la 
+componente que se está modificando.
+La función \texttt{calculo} es la que permite crear un nuevo valor a la 
+lista y llama a \texttt{sumatoria} que hace un foldr para sumar todos los 
+valores que retorna la función \texttt{funaux} que aplica la fórmula 
+correspondiente. Y finalmente como es una tupla lo que se lleva, 
+se toma el primero con ``fst'' y ``reverse'' para colocarlo en el orden
+correcto.
 
 \begin{lstlisting}
 > descend :: Double -> Hypothesis Double -> [Sample Double]
 >         -> Hypothesis Double
-> descend alpha h ss = undefined
+> descend alpha h ss = 
+>  Hypothesis {c = reverse ( fst (
+>    foldl' (calculo (length ss) alpha h ss ) ([],0) (c h)))}
+>   	where calculo tam alpha hs ss (lis, num) h = 
+>                (sumatoria tam alpha ss hs num : lis, num+1) 
+>	sumatoria tam alpha ss hy num = c hy !! num - 
+>		((foldr ((+).funaux hy num) 0 ss) 
+>		* alpha/ fromIntegral tam) 
+>	funaux hyp num s = ((theta hyp s) - y s)* (x s !! num)
 \end{lstlisting}
 
 Sea $\theta_j$ el $j-$ésimo componente del vector $\theta$
@@ -327,31 +315,35 @@ $$\theta'_j \leftarrow \theta_j -
 
 donde $m$ es el número de muestras de entrenamiento.
 
-Su función debe ser escrita exclusivamente empleando funciones
-de orden superior. En particular, se trata de dos \emph{fold}
-anidados, cada uno de ellos realizando sus cómputos en
-\emph{una sola pasada}. Debe escribirla de manera general,
-suponiendo que \texttt{ss} podría tener una cantidad arbitraria
-de muestras disponibles y que $j$ es arbitrario.
-
 La segunda parte de este algoritmo debe partir de una hipótesis
 inicial y el conjunto de entrenamiento, para producir una lista
 de elementos tales que permitan determinar, para cada iteración,
 cuál es la hipótesis mejorada y el costo de la misma.
 
+En la función \texttt{gd}, se uso ``unfoldr'' para ir construyendo la 
+lista con nuevas hipótesis y nuevos costos en cada iteración, éstas
+usan la función \texttt{calculo} para calcular los nuevos valores. Esto
+se hace hasta que los costos seas despreciables usando la función
+\texttt{veryClose} que es la condición de parada.
+
+
 \begin{lstlisting}
 > gd :: Double -> Hypothesis Double -> [Sample Double]
 >    -> [(Integer,Hypothesis Double,Double)]
-> gd alpha h ss = undefined
+> gd alpha h ss = 
+>    unfoldr (\(i,hypo,c) -> 
+>    if veryClose c 
+>	(cost (descend alpha hypo (addOnes ss)) (addOnes ss)) 
+>         then Nothing
+>	else 
+>	  Just ((i,hypo,c),calculo i alpha hypo (addOnes ss))) 
+>		(0,h,cost h (addOnes ss))
+>  where calculo i alpha hy ss = 
+>	(i+1,descend alpha hy ss, cost (descend alpha hy ss) ss)
 \end{lstlisting}
 
-Su función debe ser escrita como un \emph{unfold}. Note que esta
-será la función ``tope'', por lo tanto debe asegurarse de agregar
-los coeficientes 1 antes de comenzar a iterar, y mantener la
-iteración hasta que la diferencia entre los costos de dos
-hipótesis consecutivas sean $\epsilon-$despreciables.
 
-\subsection{¿Cómo sé si lo estoy haciendo bien?}
+\subsection{ Resultados Obtenidos}
 
 Probar las funciones \texttt{veryClose}, \texttt{addOnes}
 y \texttt{theta} es trivial por inspección. Para probar la
@@ -365,45 +357,34 @@ Probar la función \texttt{descend} es algo más complicado,
 pero la sugerencia general es probar paso a paso si se
 produce una nueva hipótesis cuyo costo es, en efecto, menor.
 
-Con las definiciones en este archivo, si su algoritmo está
-implantado correctamente, hay convergencia. Para que tenga
-una idea
 
 \begin{lstlisting}
-  ghci> take 3 (gd alpha guess training)
-  [(0,Hypothesis {c = [0.0,0.0,0.0]},6.559154810645744e10),
-   (1,Hypothesis {c = [10212.379787234042,3138.9880129854737,...
-   (2,Hypothesis {c = [20118.388180851063,6159.113611965675,...]
+>  *Main>  take 3 (gd alpha guess training)
+> [(0,Hypothesis {c = [0.0,0.0,0.0]},6.559154810645744e10),
+> (1,Hypothesis {c = [10212.379787234042,3138.9880129854737,
+>			1623.7105153222735]},
+>			6.1759853666230095e10),
+> (2,Hypothesis {c = [20118.388180851063,6159.113611965673,
+>			3148.136171427171]},
+>			5.8164574323311745e10)]
+
 \end{lstlisting}
 
 y si se deja correr hasta terminar converge (el \emph{unfold}
-\textbf{termina}) y los resultados numéricos en la última tripleta
-deberían ser muy parecidos a (indentación mía)
-
+\textbf{termina}) y los resultados numéricos en la última tripleta.
+ 
+ 
+  
+   
+   
 \begin{lstlisting}
-  (1072,
-  Hypothesis {c = [340412.65957446716,
-                   110631.04133702737,
-                   -6649.4653290010865]},
-  2.043280050602863e9)
+>  *Main> last (gd alpha guess training)
+>	(1213,Hypothesis {c = [340412.65957446716,
+>		110631.04200819538,-6649.466000169089]},
+>		2.0432800506028578e9)
+
 \end{lstlisting}
 
-Para su comodidad, he incluido la función \texttt{graph} de la
-magnífica librería \texttt{chart} que permite hacer gráficos
-sencillos (línea, torta, barra, etc.). Puede usarla para verificar
-que su función está haciendo el trabajo
-
-\begin{lstlisting}
-  ghci> graph "works" (gd alpha guess training)
-\end{lstlisting}
-
-y en el archivo \texttt{works.png} debe obtener una imagen
-similar a
-\begin{center}
-        \includegraphics[width=11cm]{works.png}
-\end{center}
-
-\subsection{¿Aprendió?}
 
 Una vez que el algoritmo converge, obtenga la última hipótesis
 y úsela para predecir el valor $y$ asociado al vector
@@ -413,22 +394,12 @@ $(-0.44127, -0.22368)$.
   ghci> let (_,h,_) = last (gd alpha guess training)
   ghci> let s = Sample ( x = [1.0, -0.44127,-0.22368], y = undefined }
   ghci> theta h s
-  293081.85236
+  293081.8522224286
 \end{verbatim}
 
 \section{Monoids}
 
-Durante la discusión en clase acerca de \texttt{Monoid} se dejó
-claro que para algunos tipos de datos existe más de una instancia
-posible. En concreto, para los números puede construirse una
-instancia \texttt{Sum} usando \texttt{(+)} como operación y
-\texttt{0} como elemento neutro, pero también puede construirse
-una instancia \texttt{Product} usando \texttt{(*)} como operación
-y \texttt{1} como elemento neutro. La solución al problema resultó
-ser el uso de tipos equivalentes pero incompatibles aprovechando
-\texttt{newtype}.
-
-Siguiendo esa idea, construya una instancia \texttt{Monoid}
+Construya una instancia \texttt{Monoid}
 \emph{polimórfica} para \emph{cualquier} tipo comparable, tal que
 al aplicarla sobre cualquier \texttt{Foldable} conteniendo 
 elementos de un tipo concreto comparable, se retorne el máximo
@@ -439,11 +410,24 @@ función
 foldMap :: (Foldable t, Monoid m) => (a -> m) -> t a -> m
 \end{verbatim}
 
-Note que en este caso \texttt{a} es el tipo comparable, y la
-primera función debe levantar el valor libre al \texttt{Monoid}
-calculador de máximos. Piense que el \texttt{Foldable} \texttt{t}
-\emph{podría} estar vacío (lista, árbol, \ldots) así que el
-\texttt{Monoid} debe operar con ``seguridad''
+Para la construcción de este Monoid, se puede notar claramente que
+tienen que ser elementos comparables entre ellos ya que se va a calcular
+el máximo de los mismos. Como no se sabe con que estructura va a trabajar 
+el Monoid, entonces puede ser que no se obtenga un resultado. Por ello
+se trabajará con el Maybe. Por lo tanto, el neutro para la función \texttt{mempty} 
+es el tipo Nothing y para la función \texttt{mappend} retorna el máximo
+entre esos elementos colocando la marca Max.
+
+
+\begin{lstlisting}
+> newtype Max a = Max { getMax :: Maybe a }
+>	deriving ( Eq ,Ord,Show)
+>
+> instance (Ord a) => Monoid ( Max a ) where
+>	mempty                       = Max Nothing
+>	mappend (Max x) (Max y) = Max $ max x y
+
+\end{lstlisting}
 
 Oriéntese con los siguientes ejemplos
 
@@ -463,26 +447,87 @@ Considere el tipo de datos
 
 \begin{lstlisting}
 > data Filesystem a = File a | Directory a [Filesystem a]
+>	deriving(Show,Eq)
 \end{lstlisting}
 
-Diseñe un zipper seguro para el tipo \texttt{Filesystem}
-proveyendo todas las funciones de soporte que permitan trasladar
-el foco dentro de la estructura de datos, así como la modificación
-de cualquier posición dentro de la estructura.
+Para moverse dentro de esta estructura, se propone un data Breadcrumbs
+que contenga el nombre del directorio donde se esta actualmente, seguido 
+de una tripla que contienen listas. La primera lista indicará los 
+directorios por lo que se ha bajado, es decir que son los padres del
+directorio actual. La segunda lista es para mostrar los \texttt{Filesystem} que 
+tiene a la izquierda del foco, y la tercera lista representa los 
+\texttt{Filesystem} que están a la derecha del foco.
+
+De esta manera tenemos lo siguiente: 
+
 
 \begin{lstlisting}
-> data Breadcrumbs a = undefined
+> data Breadcrumbs a = 
+>	Down a ([Filesystem a],[Filesystem a],[Filesystem a])
+>		deriving(Show,Eq)
 >
 > type Zipper a = (Filesystem a, Breadcrumbs a)
+\end{lstlisting}
+
+Note que habrán movimientos que no se podrán hacer, y como no se sabe
+que movimientos se haga, se trabajará con el tipo \texttt{Maybe}.
+
+Con esta estructura queda ahora definir las funciones: 
+
+\begin{lstlisting}
 >
-> goDown   ::
-> goRight  ::
-> goLeft   ::
-> goBack   ::
-> tothetop :: 
-> modify   ::
-> focus    ::
-> defocus  ::
+> goDown:: Zipper a -> Maybe (Zipper a)
+> goDown  (File a,_) = Nothing
+> goDown  (Directory a [],Down name ( lisDir ,_, _)) = Nothing
+> goDown (Directory a xs,Down name ( lisDir ,y,ys)) = 
+>    Just (head xs ,
+>       Down a (Directory name 
+>	      (reverse y++ [Directory a xs]++ys ):lisDir,
+>	      [],
+>	      tail xs))
+>
+> goRight:: Zipper a -> Maybe (Zipper a)
+> goRight  (filesys, Down name ( lis, x, xs)) = 
+>          if null xs then Nothing
+>	   else Just (head xs ,Down name (lis,filesys:x,tail xs))
+>
+> goLeft:: Zipper a -> Maybe (Zipper a)
+> goLeft (filesys, Down name ( lis, x, xs)) = 
+>	if null x then Nothing
+>	else Just (head x ,Down name (lis,tail x, filesys:xs))
+>
+> goBack:: Zipper a -> Maybe (Zipper a)
+> goBack (_,Down name ( [] ,_,_)) = Nothing
+> goBack (_,Down name ( lisDir ,_,_)) = 
+>	Just (prilista (head lisDir),
+>	      Down (nameDir (head lisDir)) 
+>	      (tail lisDir,[],reslista (head lisDir)))
+> 	 where prilista (Directory a b) = head b
+>	       nameDir (Directory a b) = a
+>	       reslista (Directory a b) = tail b
+>
+>	
+> tothetop:: Zipper a -> Zipper a
+> tothetop (tope,Down name ( [] ,lis,lis1)) =  
+>		(tope,Down name ( [] ,lis,lis1))
+> tothetop (tope,Down name ( lisdir,lis,lis1)) = 
+>		tothetop $ 
+>		fromJust $ 
+>		goBack (tope,Down name ( lisdir,lis,lis1))
+>
+> modify:: ( a -> a ) -> Zipper a -> Zipper a
+> modify f (File a ,Down name ( lisdir,lis,lis1)) = 
+>		(File (f a) ,Down name ( lisdir,lis,lis1))
+> modify f (Directory a b,Down name ( lisdir,lis,lis1)) = 
+>		(Directory (f a) b ,Down name ( lisdir,lis,lis1))
+>
+> focus :: Filesystem a -> Zipper a
+> focus (File a) = (File a,Down a ([],[],[]))
+> focus (Directory a lis) = (Directory a lis ,Down a([] ,[],[]))
+>
+> defocus :: Zipper a -> Filesystem a
+> defocus (File a, _ ) = File a
+> defocus (Directory a lis,_) = Directory a lis
 \end{lstlisting}
 
 \end{document}
